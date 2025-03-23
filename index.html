@@ -1,39 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <title>Amazon Lex Chat Bot</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lex Chatbot</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ページのコンテンツ -->
-  <h1>私たちのウェブサイト</h1>
-  
-  <!-- Amazon Lex Web UIを追加 -->
-  <script src="https://d1ytvdv39kxf24.cloudfront.net/bot-loader.min.js"></script>
-  <script>
-    // ロード時にボットを開始
-    document.addEventListener('DOMContentLoaded', function() {
-      // ボット構成
-      const botConfig = {
-        // リージョン
-        "region": "ap-northeast-1",
-        
-        // Cognito設定
-        "cognitoIdentityPoolId": "ap-northeast-1:1fcd61e3-a0df-4224-ab59-33523ae27e98",
-        
-        // Lex構成
-        "botName": "csbot",
-        "botAlias": "ChatAlias",
-        "userId": "guest-" + Date.now(),
-        
-        // UI設定
-        "initialText": "こんにちは！どうぞご質問ください。",
-        "initialSpeechInstruction": "質問や要件をお話しください",
-        "hideInputFieldsText": false
-      };
-      
-      // チャットボットをロード
-      loadLexWebUi(botConfig);
-    });
-  </script>
+  <div id="chat-container">
+    <div id="chat-output"></div>
+    <div id="input-area">
+      <input type="text" id="user-input" placeholder="メッセージを入力...">
+      <button id="send-button">送信</button>
+    </div>
+  </div>
+
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1144.0.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
