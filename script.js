@@ -1,7 +1,7 @@
 // AWS 設定 (認証情報は安全な方法で管理してください)
 AWS.config.region = 'ap-northeast-1'; // 例: 'us-east-1'
 AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-		IdentityPoolId: 'ap-northeast-1:625474a2-d85b-4d9d-b495-b607585091af', // Cognito Identity Pool ID
+		IdentityPoolId: 'ap-northeast-1:a7eb0a82-d180-4142-8027-f209aed72d20', // Cognito Identity Pool ID
 });
 
 const lexruntime = new AWS.LexRuntime();
