@@ -6,7 +6,7 @@ AWS.config.credentials = new AWS.CognitoIdentityCredentials({
 
 const lexruntime = new AWS.LexRuntime();
 const botName = "F5LKAPRIZ3"; // Lex ボットの名前
-const botAlias = "$LATEST"; // または特定のエイリアス
+const botAlias = "4VDLJRCN2O"; // または特定のエイリアス$LATEST
 const userId = "user-" + Date.now(); // 一意のユーザーID
 
 const chatOutput = document.getElementById('chat-output');
