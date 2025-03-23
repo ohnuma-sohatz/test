@@ -19,7 +19,7 @@ sendButton.addEventListener('click', sendMessage);
 // Enter キーでの送信
 userInput.addEventListener('keydown', (event) => {
 		if (event.key === 'Enter') {
-			sendMessage();
+			// sendMessage();
 		}
 });
 
