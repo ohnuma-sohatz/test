@@ -40,7 +40,7 @@ function sendMessage() {
 	lexruntime.postText(params, (err, data) => {
 			if (err) {
 				console.error(err);
-				displayMessage('エラーが発生しました。', 'bot');
+            			displayMessage(`エラーが発生しました: ${err.message || '不明なエラー'}`, 'bot');
 			} else {
 				displayMessage(data.message, 'bot');
 				if (data.dialogState === 'ReadyForFulfillment') {
