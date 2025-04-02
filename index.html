@@ -2,20 +2,84 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lex Chatbot</title>
-  <link rel="stylesheet" href="style.css">
+  <title>メインウィンドウ</title>
+  <style>
+    /* メインコンテンツを表示する iframe のスタイル */
+    #mainFrame {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+    /* 右下に表示するウィジェットのスタイル */
+    #widget {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 300px;
+      height: 200px;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      padding: 10px;
+      display: none;
+      z-index: 1000;
+    }
+    #widget button {
+      margin: 5px 0;
+    }
+  </style>
 </head>
 <body>
-  <div id="chat-container">
-    <div id="chat-output"></div>
-    <div id="input-area">
-      <input type="text" id="user-input" placeholder="メッセージを入力...">
-      <button id="send-button">送信</button>
-    </div>
+  <!-- メインコンテンツの表示用 iframe -->
+  <iframe id="mainFrame" src="main1.html"></iframe>
+
+  <!-- ウィジェットを表示するボタン -->
+  <button onclick="showWidget()" style="position: fixed; top: 10px; right: 10px;">ウィジェットを開く</button>
+
+  <!-- 右下ウィジェット -->
+  <div id="widget">
+    <h3>ウィジェット</h3>
+    <button onclick="switchMain('main1.html')">メインウィンドウ１</button>
+    <button onclick="switchMain('main2.html')">メインウィンドウ２</button>
+    <br>
+    <button onclick="hideWidget()">閉じる</button>
   </div>
 
-  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1144.0.min.js"></script>
-  <script src="script.js"></script>
+  <script>
+    // ウィジェットの表示・非表示の切り替え
+    function showWidget() {
+      document.getElementById('widget').style.display = 'block';
+    }
+    function hideWidget() {
+      document.getElementById('widget').style.display = 'none';
+    }
+
+    // メインコンテンツと URL を切り替える関数
+    function switchMain(url) {
+      document.getElementById('mainFrame').src = url;
+      history.pushState(null, '', url);
+    }
+
+    // ブラウザの戻る・進むボタンで URL 変更に対応する処理
+    window.addEventListener('popstate', function(e) {
+      // 現在の URL のパスを取得し、iframe の src に反映
+      let path = location.pathname;
+      // 例として、main1.html と main2.html が同一ディレクトリにある場合
+      if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
+        document.getElementById('mainFrame').src = path.substring(path.lastIndexOf('/') + 1);
+      } else {
+        // それ以外の場合はデフォルトとして main1.html を表示
+        document.getElementById('mainFrame').src = 'main1.html';
+      }
+    });
+
+    // ページ読み込み時に URL に合わせた初期表示の設定（任意）
+    window.addEventListener('load', function() {
+      let path = location.pathname;
+      if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
+        document.getElementById('mainFrame').src = path.substring(path.lastIndexOf('/') + 1);
+      }
+    });
+  </script>
 </body>
 </html>
