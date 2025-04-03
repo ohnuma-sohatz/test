@@ -3,115 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chatbot with Main Content</title>
-  <style>
-    /* チャットボット用スタイル（そのまま） */
-    #dify-chatbot-bubble-button {
-      background-color: transparent !important;
-      box-shadow: none !important;
-      border-radius: 0 !important;
-    }
-    #dify-chatbot-bubble-button img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    #dify-chatbot-bubble-window {
-      width: 24rem !important;
-      height: 40rem !important;
-    }
-    /* 以下、追加するメインコンテンツとウィジェット用のスタイル */
-    #mainFrame {
-      width: 100%;
-      height: 100vh;
-      border: none;
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
-    }
-    /* ウィジェット本体 */
-    #widget {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      width: 300px;
-      height: 200px;
-      background: #fff;
-      border: 1px solid #ccc;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
-      padding: 10px;
-      display: none; /* 初期状態は非表示 */
-      z-index: 1000;
-    }
-    #widget button {
-      margin: 5px 0;
-    }
-    /* ウィジェット表示ボタン（必要に応じてデザイン調整） */
-    #openWidgetButton {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 1100;
-    }
-  </style>
+  <title>Chatbot</title>
 </head>
 <body>
-  <!-- チャットボット設定 -->
-  <script>
-    window.difyChatbotConfig = {
-      token: '70Oc3Pbq9DT31NWw'
-    }
-  </script>
-  <script src="embed.min.js" id="70Oc3Pbq9DT31NWw" defer></script>
-
-  <!-- メインコンテンツを表示する iframe -->
-  <iframe id="mainFrame" src="main1.html"></iframe>
-
-  <!-- ウィジェットを開くためのボタン -->
-  <button id="openWidgetButton" onclick="showWidget()">ウィジェットを開く</button>
-
-  <!-- 右下ウィジェット：メインウィンドウ切替用のボタンを配置 -->
-  <div id="widget">
-    <h3>ウィジェット</h3>
-    <button onclick="switchMain('main1.html')">メインウィンドウ１</button>
-    <button onclick="switchMain('main2.html')">メインウィンドウ２</button>
-    <br>
-    <button onclick="hideWidget()">閉じる</button>
-  </div>
-
-  <script>
-    // ウィジェットの表示・非表示を切り替える関数
-    function showWidget() {
-      document.getElementById('widget').style.display = 'block';
-    }
-    function hideWidget() {
-      document.getElementById('widget').style.display = 'none';
-    }
-    // メインコンテンツの iframe とブラウザの URL を切り替える関数
-    function switchMain(url) {
-      document.getElementById('mainFrame').src = url;
-      // History API を使って URL を変更（同一オリジン内での相対パスを指定）
-      history.pushState(null, '', url);
-    }
-    // ブラウザの戻る・進むに対応
-    window.addEventListener('popstate', function(e) {
-      let path = location.pathname;
-      // 末尾が main1.html または main2.html の場合、iframe に反映
-      if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
-        document.getElementById('mainFrame').src = path.substring(path.lastIndexOf('/') + 1);
-      } else {
-        // デフォルトは main1.html
-        document.getElementById('mainFrame').src = 'main1.html';
-      }
-    });
-    // ページ読み込み時に現在の URL に合わせたコンテンツを表示（必要に応じて）
-    window.addEventListener('load', function() {
-      let path = location.pathname;
-      if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
-        document.getElementById('mainFrame').src = path.substring(path.lastIndexOf('/') + 1);
-      }
-    });
-  </script>
+<script>
+ window.difyChatbotConfig = {
+  token: '70Oc3Pbq9DT31NWw'
+ }
+</script>
+<script
+ src="embed.min.js"
+ id="70Oc3Pbq9DT31NWw"
+ defer>
+</script>
+<style>
+  #dify-chatbot-bubble-button {
+    background-color: transparent !important; /* 背景を透明にする */
+    box-shadow: none !important;             /* 影も消したい場合はこちらも */
+    border-radius: 0 !important;            /* 角丸を消したい場合は0に */
+  }
+  
+    /* アイコン画像をボタンいっぱいに表示する場合 */
+  #dify-chatbot-bubble-button img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* アイコンを枠内に収める */
+  }
+  
+  #dify-chatbot-bubble-window {
+    width: 24rem !important;
+    height: 40rem !important;
+  }
+</style>
 </body>
 </html>
