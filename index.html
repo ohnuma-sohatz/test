@@ -2,15 +2,35 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>メインウィンドウ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chatbot with Main Content</title>
   <style>
-    /* メインコンテンツを表示する iframe のスタイル */
+    /* チャットボット用スタイル（そのまま） */
+    #dify-chatbot-bubble-button {
+      background-color: transparent !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+    }
+    #dify-chatbot-bubble-button img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #dify-chatbot-bubble-window {
+      width: 24rem !important;
+      height: 40rem !important;
+    }
+    /* 以下、追加するメインコンテンツとウィジェット用のスタイル */
     #mainFrame {
       width: 100%;
       height: 100vh;
       border: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
     }
-    /* 右下に表示するウィジェットのスタイル */
+    /* ウィジェット本体 */
     #widget {
       position: fixed;
       bottom: 10px;
@@ -21,22 +41,37 @@
       border: 1px solid #ccc;
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
       padding: 10px;
-      display: none;
+      display: none; /* 初期状態は非表示 */
       z-index: 1000;
     }
     #widget button {
       margin: 5px 0;
     }
+    /* ウィジェット表示ボタン（必要に応じてデザイン調整） */
+    #openWidgetButton {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1100;
+    }
   </style>
 </head>
 <body>
-  <!-- メインコンテンツの表示用 iframe -->
+  <!-- チャットボット設定 -->
+  <script>
+    window.difyChatbotConfig = {
+      token: '70Oc3Pbq9DT31NWw'
+    }
+  </script>
+  <script src="embed.min.js" id="70Oc3Pbq9DT31NWw" defer></script>
+
+  <!-- メインコンテンツを表示する iframe -->
   <iframe id="mainFrame" src="main1.html"></iframe>
 
-  <!-- ウィジェットを表示するボタン -->
-  <button onclick="showWidget()" style="position: fixed; top: 10px; right: 10px;">ウィジェットを開く</button>
+  <!-- ウィジェットを開くためのボタン -->
+  <button id="openWidgetButton" onclick="showWidget()">ウィジェットを開く</button>
 
-  <!-- 右下ウィジェット -->
+  <!-- 右下ウィジェット：メインウィンドウ切替用のボタンを配置 -->
   <div id="widget">
     <h3>ウィジェット</h3>
     <button onclick="switchMain('main1.html')">メインウィンドウ１</button>
@@ -46,34 +81,31 @@
   </div>
 
   <script>
-    // ウィジェットの表示・非表示の切り替え
+    // ウィジェットの表示・非表示を切り替える関数
     function showWidget() {
       document.getElementById('widget').style.display = 'block';
     }
     function hideWidget() {
       document.getElementById('widget').style.display = 'none';
     }
-
-    // メインコンテンツと URL を切り替える関数
+    // メインコンテンツの iframe とブラウザの URL を切り替える関数
     function switchMain(url) {
       document.getElementById('mainFrame').src = url;
+      // History API を使って URL を変更（同一オリジン内での相対パスを指定）
       history.pushState(null, '', url);
     }
-
-    // ブラウザの戻る・進むボタンで URL 変更に対応する処理
+    // ブラウザの戻る・進むに対応
     window.addEventListener('popstate', function(e) {
-      // 現在の URL のパスを取得し、iframe の src に反映
       let path = location.pathname;
-      // 例として、main1.html と main2.html が同一ディレクトリにある場合
+      // 末尾が main1.html または main2.html の場合、iframe に反映
       if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
         document.getElementById('mainFrame').src = path.substring(path.lastIndexOf('/') + 1);
       } else {
-        // それ以外の場合はデフォルトとして main1.html を表示
+        // デフォルトは main1.html
         document.getElementById('mainFrame').src = 'main1.html';
       }
     });
-
-    // ページ読み込み時に URL に合わせた初期表示の設定（任意）
+    // ページ読み込み時に現在の URL に合わせたコンテンツを表示（必要に応じて）
     window.addEventListener('load', function() {
       let path = location.pathname;
       if (path.endsWith('main1.html') || path.endsWith('main2.html')) {
