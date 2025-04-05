@@ -10,6 +10,21 @@
   <a href="index">index</a>
   <script src="config.js"></script>
   <script src="embed.min.js" id="70Oc3Pbq9DT31NWw" defer></script>
+  <script>
+  window.addEventListener('load', function(){
+    const checkInterval = setInterval(function(){
+      const button = document.getElementById('dify-chatbot-bubble-button');
+      if(button){
+        clearInterval(checkInterval);
+        const chatWidgetState = localStorage.getItem("chatWidgetOpen");
+        const widget = document.getElementById('dify-chatbot-bubble-window');
+        if(chatWidgetState === "block" && (!widget || widget.style.display !== 'block')){
+          button.click(); // チャット画面を自動で開く
+        }
+      }
+    }, 100); // 0.1秒ごとにチェック（iframeの読み込み待ち）
+  });
+</script>
   <link rel="stylesheet" type="text/css" href="style.css">
 </body>
 </html>
