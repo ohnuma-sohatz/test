@@ -9,28 +9,8 @@
   <a href="main2">メイン2</a>
   <a href="index">index</a>
   <script src="config.js"></script>
-
   <script src="embed.min.js" id="70Oc3Pbq9DT31NWw" defer></script>
-<script>
-  window.addEventListener('load', function(){
-    const config = window.difyChatbotConfig || {};
-    const checkInterval = setInterval(function(){
-      if (!config.autoRestoreOnNavigation) return; // ← オフなら即終了
-      const button = document.getElementById('dify-chatbot-bubble-button');
-      const widget = document.getElementById('dify-chatbot-bubble-window');
-      const chatWidgetState = localStorage.getItem("chatWidgetOpen");
-
-      if (button) {
-        clearInterval(checkInterval);
-        if(chatWidgetState === "block" && (!widget || widget.style.display !== 'block')){
-          button.click();
-        }
-      }
-    }, 10);
-  });
-</script>
-
-
+  <script src="window.js"></script>
   <link rel="stylesheet" type="text/css" href="style.css">
 </body>
 </html>
