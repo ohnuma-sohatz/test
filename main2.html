@@ -14,6 +14,7 @@
 <script>
   window.addEventListener('load', function(){
     const checkInterval = setInterval(function(){
+      if (!config.autoRestoreOnNavigation) return; // ← オフなら即終了
       const button = document.getElementById('dify-chatbot-bubble-button');
       const widget = document.getElementById('dify-chatbot-bubble-window');
       const chatWidgetState = localStorage.getItem("chatWidgetOpen");
