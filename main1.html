@@ -20,15 +20,16 @@
   window.addEventListener('load', function(){
     const checkInterval = setInterval(function(){
       const button = document.getElementById('dify-chatbot-bubble-button');
-      if(button){
+      const widget = document.getElementById('dify-chatbot-bubble-window');
+      const chatWidgetState = localStorage.getItem("chatWidgetOpen");
+
+      if (button) {
         clearInterval(checkInterval);
-        const chatWidgetState = localStorage.getItem("chatWidgetOpen");
-        const widget = document.getElementById('dify-chatbot-bubble-window');
         if(chatWidgetState === "block" && (!widget || widget.style.display !== 'block')){
-          button.click(); // ボタンをクリックしてウィジェットを開く
+          button.click();
         }
       }
-    }, 100); // ボタンが生成されるまで待つ
+    }, 100);
   });
 </script>
 
