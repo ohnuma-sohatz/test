@@ -15,7 +15,7 @@
 <body class="bg-gray-50 min-h-screen font-sans">
     <div class="max-w-3xl mx-auto p-6">
         <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold text-gray-800">オフライン話者分離デモ (v2)</h1>
+            <h1 class="text-3xl font-bold text-gray-800">オフライン話者分離デモ (v2.1)</h1>
             <p class="text-gray-600 mt-2">ブラウザ上で話者の特徴を抽出し、分離します</p>
         </header>
 
@@ -24,25 +24,25 @@
                 <div class="flex items-center justify-between">
                     <div id="status" class="flex items-center space-x-2">
                         <span id="status-dot" class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-                        <span id="status-text" class="text-sm font-medium text-gray-700">Initializing...</span>
+                        <span id="status-text" class="text-sm font-medium text-gray-700">Initializing AI...</span>
                     </div>
                     <div id="progress-bar-container" class="hidden w-1/2 bg-gray-200 rounded-full h-2">
                         <div id="progress-bar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
                     </div>
                 </div>
-                <div id="error-details" class="hidden mt-2 text-xs text-red-600 font-mono bg-red-50 p-2 rounded"></div>
+                <div id="error-details" class="hidden mt-4 text-xs text-red-600 font-mono bg-red-50 p-3 rounded-lg border border-red-100 whitespace-pre-wrap"></div>
             </div>
             
             <div class="flex space-x-2 mb-6">
-                <button id="record-btn" disabled class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-30 transition-all">
+                <button id="record-btn" disabled class="flex-1 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 disabled:opacity-30 transition-all shadow-lg shadow-blue-200">
                     録音開始
                 </button>
-                <button id="stop-btn" disabled class="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 disabled:opacity-30 transition-all">
+                <button id="stop-btn" disabled class="flex-1 px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 disabled:opacity-30 transition-all shadow-lg shadow-red-200">
                     停止して分析
                 </button>
             </div>
 
-            <div id="visualizer-container" class="w-full h-24 bg-gray-900 rounded-xl overflow-hidden shadow-inner">
+            <div id="visualizer-container" class="w-full h-24 bg-gray-900 rounded-2xl overflow-hidden shadow-inner">
                 <canvas id="visualizer" class="w-full h-full"></canvas>
             </div>
         </div>
@@ -50,21 +50,21 @@
         <div class="space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold text-gray-800">分析結果</h2>
-                <button id="clear-btn" class="text-xs text-gray-400 hover:text-gray-600 underline">クリア</button>
+                <button id="clear-btn" class="text-xs text-gray-400 hover:text-gray-600 underline">結果をクリア</button>
             </div>
-            <div id="results" class="space-y-3 min-h-[200px] border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center">
-                <p id="placeholder-text" class="text-gray-400 italic">録音データがここに表示されます</p>
+            <div id="results" class="space-y-3 min-h-[200px] border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center bg-white/50">
+                <p id="placeholder-text" class="text-gray-400 italic text-sm">録音終了後に話者ごとのタイムラインが表示されます</p>
             </div>
         </div>
     </div>
 
     <script type="module">
-        // Transformers.js v3 (最新のHugging Face版)
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0';
+        // ライブラリを最新の安定版に変更
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2';
 
-        // 環境設定
+        // 環境設定の強化
         env.allowLocalModels = false;
-        // 一部の古い環境やセキュリティの厳しい環境ではSIMDを無効にすると動く場合があります
+        env.allowRemoteModels = true; // 明示的に許可
         env.backends.onnx.wasm.simd = true; 
 
         const recordBtn = document.getElementById('record-btn');
@@ -87,28 +87,35 @@
 
         async function init() {
             try {
-                statusText.innerText = 'モデルをダウンロード中... (初回のみ)';
+                statusText.innerText = 'AIモデルの準備中...';
                 progressBarContainer.classList.remove('hidden');
 
-                // モデルのロード (進捗コールバック付き)
-                classifier = await pipeline('feature-extraction', 'Xenova/wav2vec2-base-superb-sid', {
+                // 最新の公式リポジトリを使用
+                classifier = await pipeline('feature-extraction', 'onnx-community/wav2vec2-base-superb-sid', {
+                    device: 'webgpu', // 利用可能な場合はGPUを使用（フォールバックあり）
                     progress_callback: (data) => {
                         if (data.status === 'progress') {
                             progressBar.style.width = `${data.progress}%`;
+                            statusText.innerText = `ダウンロード中: ${Math.round(data.progress)}%`;
                         }
                     }
                 });
                 
-                statusText.innerText = '準備完了';
+                statusText.innerText = '準備完了（オフライン動作可能）';
                 statusDot.className = 'relative inline-flex rounded-full h-3 w-3 bg-green-500';
                 progressBarContainer.classList.add('hidden');
                 recordBtn.disabled = false;
             } catch (err) {
-                console.error("Initialization error:", err);
+                console.error("Initialization error details:", err);
                 statusText.innerText = 'ロード失敗';
                 statusDot.className = 'relative inline-flex rounded-full h-3 w-3 bg-red-500';
                 errorDetails.classList.remove('hidden');
-                errorDetails.innerText = `Error: ${err.message}\n\n[対策]\n1. HTTPS (または localhost) で実行してください\n2. ネットワーク接続を確認してください\n3. Chrome/Edge/Firefoxの最新版を使用してください`;
+                
+                let message = `エラー: ${err.message}\n\n`;
+                if (err.message.includes('Unauthorized')) {
+                    message += `【原因と対策】\nブラウザのセキュリティ設定によってモデルの取得がブロックされています。\n1. BraveやFirefoxをご使用の場合、「トラッキング防止」をオフにしてみてください。\n2. 企業内ネットワークの場合はプロキシがHuggingFaceへのアクセスを遮断している可能性があります。\n3. URLバー左の鍵マークから「サイトの設定」を開き、ポップアップやブロックされている項目がないか確認してください。`;
+                }
+                errorDetails.innerText = message;
             }
         }
 
@@ -137,7 +144,7 @@
                 mediaRecorder.start();
                 recordBtn.disabled = true;
                 stopBtn.disabled = false;
-                statusText.innerText = '録音中...';
+                statusText.innerText = 'マイクから集音中...';
                 drawVisualizer();
             } catch (err) {
                 alert("マイクへのアクセスが拒否されました: " + err.message);
@@ -145,58 +152,62 @@
         };
 
         stopBtn.onclick = () => {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
             recordBtn.disabled = false;
             stopBtn.disabled = true;
-            statusText.innerText = 'AI分析を実行中...';
+            statusText.innerText = '特徴量を分析中...';
             cancelAnimationFrame(animationId);
         };
 
         async function processAudio() {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const arrayBuffer = await audioBlob.arrayBuffer();
-            const decodedData = await audioContext.decodeAudioData(arrayBuffer);
-            const rawData = decodedData.getChannelData(0);
-            
-            // 1.2秒ごとのセグメントで話者を判定
-            const windowSize = 16000 * 1.2; 
-            const segments = [];
-            for (let i = 0; i < rawData.length; i += windowSize) {
-                const chunk = rawData.slice(i, i + windowSize);
-                const rms = Math.sqrt(chunk.reduce((a, b) => a + b * b, 0) / chunk.length);
-                if (rms > 0.015) { // 少し感度を調整
-                    segments.push({
-                        data: chunk,
-                        start: (i / 16000).toFixed(1),
-                        end: (Math.min(i + windowSize, rawData.length) / 16000).toFixed(1)
-                    });
-                }
-            }
-
-            if (segments.length === 0) {
-                statusText.innerText = '分析失敗: 無音';
-                return;
-            }
-
-            const results = [];
-            const speakerEmbeddings = [];
-
-            for (const seg of segments) {
-                // モデル推論
-                const output = await classifier(seg.data);
-                const embedding = Array.from(output.data);
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const decodedData = await audioContext.decodeAudioData(arrayBuffer);
+                const rawData = decodedData.getChannelData(0);
                 
-                let speakerId = assignSpeaker(embedding, speakerEmbeddings);
-                results.push({ ...seg, speakerId });
-            }
+                const windowSize = 16000 * 1.5; 
+                const segments = [];
+                for (let i = 0; i < rawData.length; i += windowSize) {
+                    const chunk = rawData.slice(i, i + windowSize);
+                    const rms = Math.sqrt(chunk.reduce((a, b) => a + b * b, 0) / chunk.length);
+                    if (rms > 0.01) {
+                        segments.push({
+                            data: chunk,
+                            start: (i / 16000).toFixed(1),
+                            end: (Math.min(i + windowSize, rawData.length) / 16000).toFixed(1)
+                        });
+                    }
+                }
 
-            displayResults(results);
-            statusText.innerText = '分析完了';
+                if (segments.length === 0) {
+                    statusText.innerText = '声が検出されませんでした';
+                    return;
+                }
+
+                const results = [];
+                const speakerEmbeddings = [];
+
+                for (const seg of segments) {
+                    const output = await classifier(seg.data);
+                    const embedding = Array.from(output.data);
+                    let speakerId = assignSpeaker(embedding, speakerEmbeddings);
+                    results.push({ ...seg, speakerId });
+                }
+
+                displayResults(results);
+                statusText.innerText = '分析完了';
+            } catch (e) {
+                console.error(e);
+                statusText.innerText = '分析エラー発生';
+            }
         }
 
         function assignSpeaker(newEmb, existingEmbs) {
-            const threshold = 0.82; // 調整可能なしきい値
+            const threshold = 0.85;
             let maxSim = -1;
             let bestSpeakerIdx = -1;
 
@@ -239,7 +250,10 @@
                 div.className = `w-full p-4 bg-white rounded-xl shadow-sm border speaker-${res.speakerId <= 3 ? res.speakerId : 'unknown'}`;
                 div.innerHTML = `
                     <div class="flex justify-between items-center">
-                        <span class="font-bold text-gray-800">話者 ${res.speakerId}</span>
+                        <span class="font-bold text-gray-800 flex items-center">
+                            <span class="w-2 h-2 rounded-full mr-2 bg-current opacity-70"></span>
+                            話者 ${res.speakerId}
+                        </span>
                         <span class="text-xs font-mono text-gray-400">${res.start}s - ${res.end}s</span>
                     </div>
                 `;
@@ -257,7 +271,7 @@
                 animationId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
                 
-                canvasCtx.fillStyle = 'rgb(17, 24, 39)';
+                canvasCtx.fillStyle = '#111827';
                 canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
                 const barWidth = (canvas.width / bufferLength) * 2.5;
@@ -274,10 +288,11 @@
         }
 
         document.getElementById('clear-btn').onclick = () => {
-            resultsContainer.innerHTML = '<p id="placeholder-text" class="text-gray-400 italic">録音データがここに表示されます</p>';
+            resultsContainer.innerHTML = '<p id="placeholder-text" class="text-gray-400 italic text-sm">録音終了後に話者ごとのタイムラインが表示されます</p>';
             resultsContainer.classList.add('items-center', 'justify-center');
         };
 
+        // 初期化実行
         init();
     </script>
 </body>
