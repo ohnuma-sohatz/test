@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リアルタイム話者分離</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+#app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 20px 72px 20px;
+}
+
+/* ===== ヘッダー ===== */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #333;
+}
+
+header h1 {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+#recording-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+#status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  transition: background 0.3s;
+}
+
+#status-dot.recording {
+  background: #ff4444;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== セクション共通 ===== */
+section {
+  background: #16213e;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+section h2 {
+  font-size: 0.8rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+/* ===== 波形 ===== */
+#waveform-canvas {
+  width: 100%;
+  height: 80px;
+  border-radius: 6px;
+  background: #0f0f23;
+}
+
+/* ===== 話者インジケーター ===== */
+#current-speaker-section {
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px;
+}
+
+#speaker-indicator {
+  text-align: center;
+  border: 4px solid #555;
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.3s, color 0.3s;
+  color: #555;
+}
+
+#speaker-label {
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#speaker-sublabel {
+  font-size: 0.7rem;
+  margin-top: 2px;
+  color: #888;
+}
+
+/* ===== 統計セクション ===== */
+#stats-section {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+#counters {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.counter-card {
+  background: #0f0f23;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.counter-card.speaker-a {
+  border-left-color: #4ecdc4;
+}
+
+.counter-card.speaker-b {
+  border-left-color: #ff6b6b;
+}
+
+.counter-card h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.counter-card.speaker-a h3 { color: #4ecdc4; }
+.counter-card.speaker-b h3 { color: #ff6b6b; }
+
+.time-display {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.counter-card.speaker-a .time-display { color: #4ecdc4; }
+.counter-card.speaker-b .time-display { color: #ff6b6b; }
+
+#ratio-chart {
+  flex-shrink: 0;
+}
+
+#ratio-canvas {
+  width: 140px;
+  height: 140px;
+}
+
+/* ===== タイムライン ===== */
+#timeline-canvas {
+  width: 100%;
+  height: 40px;
+  border-radius: 6px;
+  background: #0f0f23;
+}
+
+/* ===== パラメータ調整 ===== */
+#settings-section {
+  padding: 10px 16px;
+}
+
+#settings-section details {
+  cursor: pointer;
+}
+
+#settings-section summary {
+  font-size: 0.8rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  outline: none;
+  user-select: none;
+}
+
+#settings-section summary::-webkit-details-marker {
+  color: #888;
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+
+.param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-item label {
+  font-size: 0.75rem;
+  color: #aaa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.param-item label .param-value {
+  color: #4ecdc4;
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.param-item input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #0f0f23;
+  outline: none;
+}
+
+.param-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4ecdc4;
+  cursor: pointer;
+  border: 2px solid #16213e;
+}
+
+.param-item input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4ecdc4;
+  cursor: pointer;
+  border: 2px solid #16213e;
+}
+
+.param-hint {
+  font-size: 0.65rem;
+  color: #666;
+  margin-top: 2px;
+}
+
+/* ===== デバッグ情報 ===== */
+#debug-info {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: #666;
+  white-space: pre-wrap;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #1a1a2e;
+}
+
+/* ===== 操作ボタン（固定） ===== */
+#controls-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #1a1a2e;
+  padding: 12px 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  border-top: 1px solid #333;
+  border-radius: 0;
+  margin-bottom: 0;
+}
+
+#controls-section button {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  color: #fff;
+}
+
+#controls-section button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+#controls-section button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+#controls-section button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#btn-start {
+  background: #2ecc71;
+}
+
+#btn-stop {
+  background: #e74c3c;
+}
+
+#btn-reset {
+  background: #555;
+}
+
+/* ===== レスポンシブ ===== */
+@media (max-width: 600px) {
+  #stats-section {
+    flex-direction: column;
+  }
+  #ratio-chart {
+    align-self: center;
+  }
+  #speaker-indicator {
+    width: 80px;
+    height: 80px;
+  }
+  #speaker-label {
+    font-size: 2rem;
+  }
+  .param-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>リアルタイム話者分離</h1>
+    <div id="recording-status">
+      <span id="status-dot"></span>
+      <span id="status-text">停止中</span>
+    </div>
+  </header>
+
+  <section id="waveform-section">
+    <h2>波形</h2>
+    <canvas id="waveform-canvas"></canvas>
+  </section>
+
+  <section id="current-speaker-section">
+    <div id="speaker-indicator">
+      <div id="speaker-label">--</div>
+      <div id="speaker-sublabel">待機中</div>
+    </div>
+  </section>
+
+  <section id="stats-section">
+    <div id="counters">
+      <div class="counter-card speaker-a">
+        <h3>話者 A</h3>
+        <div class="time-display" id="time-a">0.0秒</div>
+      </div>
+      <div class="counter-card speaker-b">
+        <h3>話者 B</h3>
+        <div class="time-display" id="time-b">0.0秒</div>
+      </div>
+    </div>
+    <div id="ratio-chart">
+      <canvas id="ratio-canvas"></canvas>
+    </div>
+  </section>
+
+  <section id="timeline-section">
+    <h2>タイムライン</h2>
+    <canvas id="timeline-canvas"></canvas>
+  </section>
+
+  <section id="settings-section">
+    <details>
+      <summary>パラメータ調整</summary>
+      <div class="param-grid">
+        <div class="param-item">
+          <label>
+            話者判定閾値
+            <span class="param-value" id="val-similarity">0.82</span>
+          </label>
+          <input type="range" id="slider-similarity" min="0.60" max="0.95" step="0.01" value="0.82">
+          <div class="param-hint">低い=別話者と判定しやすい / 高い=同一話者と判定しやすい</div>
+        </div>
+        <div class="param-item">
+          <label>
+            モデル更新閾値
+            <span class="param-value" id="val-confidence">0.85</span>
+          </label>
+          <input type="range" id="slider-confidence" min="0.75" max="0.99" step="0.01" value="0.85">
+          <div class="param-hint">この閾値以上の確信度の時のみモデルを更新（汚染防止）</div>
+        </div>
+        <div class="param-item">
+          <label>
+            セグメント長 (ms)
+            <span class="param-value" id="val-segment">500</span>
+          </label>
+          <input type="range" id="slider-segment" min="200" max="1000" step="50" value="500">
+          <div class="param-hint">短い=応答性高い / 長い=安定性高い</div>
+        </div>
+        <div class="param-item">
+          <label>
+            2人目登録セグメント数
+            <span class="param-value" id="val-minseg">5</span>
+          </label>
+          <input type="range" id="slider-minseg" min="2" max="15" step="1" value="5">
+          <div class="param-hint">話者A確立後、2人目を登録可能になるセグメント数</div>
+        </div>
+        <div class="param-item">
+          <label>
+            連続異質セグメント数
+            <span class="param-value" id="val-consecutive">3</span>
+          </label>
+          <input type="range" id="slider-consecutive" min="2" max="6" step="1" value="3">
+          <div class="param-hint">連続してこの回数だけ異なれば2人目を登録（誤登録防止）</div>
+        </div>
+      </div>
+    </details>
+    <div id="debug-info">待機中...</div>
+  </section>
+</div>
+
+<div id="controls-section">
+  <button id="btn-start">開始</button>
+  <button id="btn-stop" disabled>停止</button>
+  <button id="btn-reset">リセット</button>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ============================================================
+  // CONFIG - 設定定数
+  // ============================================================
+  const CONFIG = {
+    TARGET_SAMPLE_RATE: 16000,
+    FRAME_LENGTH_MS: 25,
+    FRAME_SHIFT_MS: 10,
+    FFT_SIZE: 512,
+
+    NUM_MEL_FILTERS: 26,
+    NUM_MFCC_COEFFS: 13,
+    MEL_LOW_FREQ: 0,
+    MEL_HIGH_FREQ: 8000,
+    PRE_EMPHASIS_COEFF: 0.97,
+
+    // VAD設定
+    VAD_ENERGY_THRESHOLD: 0.008,
+    VAD_CALIBRATION_FRAMES: 80,
+    VAD_HANG_FRAMES: 15,
+
+    // 話者分離設定（UIスライダーで調整可能）
+    SEGMENT_LENGTH_MS: 500,
+    SPEAKER_SIMILARITY_THRESHOLD: 0.78,
+    HIGH_CONFIDENCE_THRESHOLD: 0.99,
+    MIN_ENROLLMENT_SEGMENTS: 5,
+    MIN_SEGMENTS_FOR_SECOND_SPEAKER: 5,
+    CONSECUTIVE_DIFF_REQUIRED: 5,  // 2人目登録に必要な連続異質セグメント数
+
+    // デルタ特徴量
+    DELTA_WINDOW: 2,
+
+    WORKLET_BUFFER_SIZE: 4096,
+
+    COLORS: {
+      SPEAKER_A: '#4ecdc4',
+      SPEAKER_B: '#ff6b6b',
+      SILENCE: '#555555',
+      BACKGROUND: '#0f0f23',
+      TEXT: '#e0e0e0',
+    },
+
+    FRAME_LENGTH_SAMPLES: 0,
+    FRAME_SHIFT_SAMPLES: 0,
+
+    init() {
+      this.FRAME_LENGTH_SAMPLES = Math.round(this.TARGET_SAMPLE_RATE * this.FRAME_LENGTH_MS / 1000);
+      this.FRAME_SHIFT_SAMPLES = Math.round(this.TARGET_SAMPLE_RATE * this.FRAME_SHIFT_MS / 1000);
+    }
+  };
+
+  // ============================================================
+  // DSP - デジタル信号処理ユーティリティ
+  // ============================================================
+  const DSP = {
+    hammingWindow(size) {
+      const w = new Float32Array(size);
+      for (let n = 0; n < size; n++) {
+        w[n] = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (size - 1));
+      }
+      return w;
+    },
+
+    preEmphasis(signal, alpha) {
+      const result = new Float32Array(signal.length);
+      result[0] = signal[0];
+      for (let i = 1; i < signal.length; i++) {
+        result[i] = signal[i] - alpha * signal[i - 1];
+      }
+      return result;
+    },
+
+    fft(real, imag) {
+      const n = real.length;
+      if (n <= 1) return;
+
+      let j = 0;
+      for (let i = 1; i < n; i++) {
+        let bit = n >> 1;
+        while (j & bit) { j ^= bit; bit >>= 1; }
+        j ^= bit;
+        if (i < j) {
+          let tmp = real[i]; real[i] = real[j]; real[j] = tmp;
+          tmp = imag[i]; imag[i] = imag[j]; imag[j] = tmp;
+        }
+      }
+
+      for (let len = 2; len <= n; len *= 2) {
+        const halfLen = len / 2;
+        const angle = -2 * Math.PI / len;
+        const wR = Math.cos(angle);
+        const wI = Math.sin(angle);
+
+        for (let i = 0; i < n; i += len) {
+          let cR = 1, cI = 0;
+          for (let k = 0; k < halfLen; k++) {
+            const idx = i + k + halfLen;
+            const tR = cR * real[idx] - cI * imag[idx];
+            const tI = cR * imag[idx] + cI * real[idx];
+            real[idx] = real[i + k] - tR;
+            imag[idx] = imag[i + k] - tI;
+            real[i + k] += tR;
+            imag[i + k] += tI;
+            const newCR = cR * wR - cI * wI;
+            cI = cR * wI + cI * wR;
+            cR = newCR;
+          }
+        }
+      }
+    },
+
+    powerSpectrum(real, imag, fftSize) {
+      const numBins = fftSize / 2 + 1;
+      const power = new Float32Array(numBins);
+      for (let k = 0; k < numBins; k++) {
+        power[k] = (real[k] * real[k] + imag[k] * imag[k]) / fftSize;
+      }
+      return power;
+    },
+
+    hzToMel(hz) {
+      return 2595 * Math.log10(1 + hz / 700);
+    },
+
+    melToHz(mel) {
+      return 700 * (Math.pow(10, mel / 2595) - 1);
+    },
+
+    createMelFilterBank(numFilters, fftSize, sampleRate, lowFreq, highFreq) {
+      const numBins = fftSize / 2 + 1;
+      const lowMel = this.hzToMel(lowFreq);
+      const highMel = this.hzToMel(highFreq);
+
+      const melPoints = new Float32Array(numFilters + 2);
+      for (let i = 0; i < numFilters + 2; i++) {
+        melPoints[i] = lowMel + (highMel - lowMel) * i / (numFilters + 1);
+      }
+
+      const binPoints = new Array(numFilters + 2);
+      for (let i = 0; i < numFilters + 2; i++) {
+        const hz = this.melToHz(melPoints[i]);
+        binPoints[i] = Math.floor((fftSize + 1) * hz / sampleRate);
+      }
+
+      const filterBank = [];
+      for (let m = 1; m <= numFilters; m++) {
+        const filter = new Float32Array(numBins);
+        const left = binPoints[m - 1];
+        const center = binPoints[m];
+        const right = binPoints[m + 1];
+
+        for (let k = left; k < center; k++) {
+          if (center !== left) filter[k] = (k - left) / (center - left);
+        }
+        for (let k = center; k <= right; k++) {
+          if (right !== center) filter[k] = (right - k) / (right - center);
+        }
+        filterBank.push(filter);
+      }
+      return filterBank;
+    },
+
+    dctII(input, numCoeffs) {
+      const K = input.length;
+      const output = new Float32Array(numCoeffs);
+      for (let n = 0; n < numCoeffs; n++) {
+        let sum = 0;
+        for (let k = 0; k < K; k++) {
+          sum += input[k] * Math.cos(Math.PI * n * (2 * k + 1) / (2 * K));
+        }
+        output[n] = sum;
+      }
+      return output;
+    },
+
+    downsample(buffer, fromRate, toRate) {
+      if (fromRate === toRate) return new Float32Array(buffer);
+      const ratio = fromRate / toRate;
+      const newLength = Math.round(buffer.length / ratio);
+      const result = new Float32Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        const srcIndex = i * ratio;
+        const floor = Math.floor(srcIndex);
+        const ceil = Math.min(floor + 1, buffer.length - 1);
+        const frac = srcIndex - floor;
+        result[i] = buffer[floor] * (1 - frac) + buffer[ceil] * frac;
+      }
+      return result;
+    },
+
+    computeRMS(frame) {
+      let sum = 0;
+      for (let i = 0; i < frame.length; i++) {
+        sum += frame[i] * frame[i];
+      }
+      return Math.sqrt(sum / frame.length);
+    }
+  };
+
+  // ============================================================
+  // MFCCExtractor - MFCC特徴抽出 (デルタ・デルタデルタ付き)
+  // ============================================================
+  const MFCCExtractor = {
+    melFilterBank: null,
+    hammingWin: null,
+
+    init() {
+      this.melFilterBank = DSP.createMelFilterBank(
+        CONFIG.NUM_MEL_FILTERS, CONFIG.FFT_SIZE,
+        CONFIG.TARGET_SAMPLE_RATE, CONFIG.MEL_LOW_FREQ, CONFIG.MEL_HIGH_FREQ
+      );
+      this.hammingWin = DSP.hammingWindow(CONFIG.FRAME_LENGTH_SAMPLES);
+    },
+
+    extractFrame(frame) {
+      const emphasized = DSP.preEmphasis(frame, CONFIG.PRE_EMPHASIS_COEFF);
+
+      const windowed = new Float32Array(CONFIG.FFT_SIZE);
+      for (let i = 0; i < CONFIG.FRAME_LENGTH_SAMPLES; i++) {
+        windowed[i] = emphasized[i] * this.hammingWin[i];
+      }
+
+      const real = new Float32Array(windowed);
+      const imag = new Float32Array(CONFIG.FFT_SIZE);
+      DSP.fft(real, imag);
+
+      const power = DSP.powerSpectrum(real, imag, CONFIG.FFT_SIZE);
+
+      const melEnergies = new Float32Array(CONFIG.NUM_MEL_FILTERS);
+      for (let m = 0; m < CONFIG.NUM_MEL_FILTERS; m++) {
+        let sum = 0;
+        const filter = this.melFilterBank[m];
+        for (let k = 0; k < power.length; k++) {
+          sum += power[k] * filter[k];
+        }
+        melEnergies[m] = Math.max(sum, 1e-22);
+      }
+
+      const logMel = new Float32Array(CONFIG.NUM_MEL_FILTERS);
+      for (let m = 0; m < CONFIG.NUM_MEL_FILTERS; m++) {
+        logMel[m] = Math.log(melEnergies[m]);
+      }
+
+      const allCoeffs = DSP.dctII(logMel, CONFIG.NUM_MFCC_COEFFS);
+      return allCoeffs.subarray(1); // 12次元 (C1-C12)
+    },
+
+    computeDelta(frames, window) {
+      const W = window;
+      const deltas = [];
+      for (let t = 0; t < frames.length; t++) {
+        const dim = frames[t].length;
+        const delta = new Float32Array(dim);
+        let denom = 0;
+        for (let n = 1; n <= W; n++) {
+          denom += 2 * n * n;
+        }
+        if (denom === 0) denom = 1;
+        for (let d = 0; d < dim; d++) {
+          let num = 0;
+          for (let n = 1; n <= W; n++) {
+            const tPlus = Math.min(t + n, frames.length - 1);
+            const tMinus = Math.max(t - n, 0);
+            num += n * (frames[tPlus][d] - frames[tMinus][d]);
+          }
+          delta[d] = num / denom;
+        }
+        deltas.push(delta);
+      }
+      return deltas;
+    },
+
+    computeFullFeatures(mfccFrames) {
+      if (mfccFrames.length === 0) return [];
+      const deltas = this.computeDelta(mfccFrames, CONFIG.DELTA_WINDOW);
+      const deltaDeltas = this.computeDelta(deltas, CONFIG.DELTA_WINDOW);
+
+      const fullFeatures = [];
+      for (let i = 0; i < mfccFrames.length; i++) {
+        const dim = mfccFrames[i].length;
+        const full = new Float32Array(dim * 3);
+        full.set(mfccFrames[i], 0);
+        full.set(deltas[i], dim);
+        full.set(deltaDeltas[i], dim * 2);
+        fullFeatures.push(full);
+      }
+      return fullFeatures;
+    }
+  };
+
+  // ============================================================
+  // VADDetector - 音声活動検出 (ハング付き)
+  // ============================================================
+  const VADDetector = {
+    noiseFloor: 0,
+    speechThreshold: 0,
+    frameCount: 0,
+    hangCounter: 0,
+    isSpeaking: false,
+
+    reset() {
+      this.noiseFloor = 0;
+      this.speechThreshold = CONFIG.VAD_ENERGY_THRESHOLD;
+      this.frameCount = 0;
+      this.hangCounter = 0;
+      this.isSpeaking = false;
+    },
+
+    isSpeech(frame) {
+      const energy = DSP.computeRMS(frame);
+      this.frameCount++;
+
+      if (this.frameCount <= CONFIG.VAD_CALIBRATION_FRAMES) {
+        this.noiseFloor = this.noiseFloor * (this.frameCount - 1) / this.frameCount
+                          + energy / this.frameCount;
+        this.speechThreshold = Math.max(this.noiseFloor * 4, CONFIG.VAD_ENERGY_THRESHOLD);
+        return false;
+      }
+
+      if (!this.isSpeaking) {
+        this.noiseFloor = this.noiseFloor * 0.97 + energy * 0.03;
+        this.speechThreshold = Math.max(this.noiseFloor * 4, CONFIG.VAD_ENERGY_THRESHOLD);
+      }
+
+      if (energy > this.speechThreshold) {
+        this.isSpeaking = true;
+        this.hangCounter = CONFIG.VAD_HANG_FRAMES;
+        return true;
+      }
+
+      if (this.hangCounter > 0) {
+        this.hangCounter--;
+        return true;
+      }
+
+      this.isSpeaking = false;
+      return false;
+    }
+  };
+
+  // ============================================================
+  // SpeakerModel - 話者モデル (オンライン話者埋め込み)
+  // ============================================================
+  const SpeakerModel = {
+    cosineSimilarity(a, b) {
+      let dotProduct = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i++) {
+        dotProduct += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+      }
+      normA = Math.sqrt(normA);
+      normB = Math.sqrt(normB);
+      if (normA < 1e-10 || normB < 1e-10) return 0;
+      return dotProduct / (normA * normB);
+    },
+
+    computeMean(vectors) {
+      if (vectors.length === 0) return null;
+      const dim = vectors[0].length;
+      const mean = new Float32Array(dim);
+      for (const vec of vectors) {
+        for (let d = 0; d < dim; d++) {
+          mean[d] += vec[d];
+        }
+      }
+      for (let d = 0; d < dim; d++) {
+        mean[d] /= vectors.length;
+      }
+      return mean;
+    },
+
+    l2Normalize(vec) {
+      let norm = 0;
+      for (let i = 0; i < vec.length; i++) {
+        norm += vec[i] * vec[i];
+      }
+      norm = Math.sqrt(norm);
+      if (norm < 1e-10) return vec;
+      const result = new Float32Array(vec.length);
+      for (let i = 0; i < vec.length; i++) {
+        result[i] = vec[i] / norm;
+      }
+      return result;
+    }
+  };
+
+  // ============================================================
+  // DiarizationEngine - 話者分離エンジン
+  //
+  // 方式: オンライン話者登録 + コサイン類似度判定
+  //       + 確信度フィルター付きモデル更新
+  //       + 初期モデル安定化
+  // ============================================================
+  const DiarizationEngine = {
+    allFrameLabels: [],
+    currentSegmentMFCCs: [],
+
+    speakerModels: [],
+    numSpeakers: 0,
+
+    speakerATime: 0,
+    speakerBTime: 0,
+    currentSpeaker: -1,
+    isReady: false,
+    isSingleSpeaker: true,
+    timelineSegments: [],
+    segmentCount: 0,
+
+    residualBuffer: null,
+    silenceFrameCount: 0,
+    speechFrameCount: 0,
+
+    debugInfo: '',
+    lastSimilarities: [],
+    consecutiveDiffCount: 0,       // 連続して閾値未満だったセグメント数
+    candidateEmbeddings: [],       // 2人目候補の埋め込みバッファ
+
+    reset() {
+      this.allFrameLabels = [];
+      this.currentSegmentMFCCs = [];
+      this.speakerModels = [];
+      this.numSpeakers = 0;
+      this.speakerATime = 0;
+      this.speakerBTime = 0;
+      this.currentSpeaker = -1;
+      this.isReady = false;
+      this.isSingleSpeaker = true;
+      this.timelineSegments = [];
+      this.segmentCount = 0;
+      this.residualBuffer = null;
+      this.silenceFrameCount = 0;
+      this.speechFrameCount = 0;
+      this.debugInfo = '';
+      this.lastSimilarities = [];
+      this.consecutiveDiffCount = 0;
+      this.candidateEmbeddings = [];
+      VADDetector.reset();
+    },
+
+    processAudio(signal, timestamp) {
+      let combined;
+      if (this.residualBuffer && this.residualBuffer.length > 0) {
+        combined = new Float32Array(this.residualBuffer.length + signal.length);
+        combined.set(this.residualBuffer);
+        combined.set(signal, this.residualBuffer.length);
+      } else {
+        combined = signal;
+      }
+
+      const frameLen = CONFIG.FRAME_LENGTH_SAMPLES;
+      const frameShift = CONFIG.FRAME_SHIFT_SAMPLES;
+      let start = 0;
+      const framesPerSegment = Math.round(CONFIG.SEGMENT_LENGTH_MS / CONFIG.FRAME_SHIFT_MS);
+
+      for (; start + frameLen <= combined.length; start += frameShift) {
+        const frame = combined.subarray(start, start + frameLen);
+        const isSpeech = VADDetector.isSpeech(frame);
+
+        if (isSpeech) {
+          const mfcc = MFCCExtractor.extractFrame(frame);
+          this.currentSegmentMFCCs.push(mfcc);
+          this.speechFrameCount++;
+          this.silenceFrameCount = 0;
+
+          if (this.currentSegmentMFCCs.length >= framesPerSegment) {
+            this.processSegment();
+            this.currentSegmentMFCCs = [];
+          }
+
+          this.allFrameLabels.push(this.currentSpeaker >= 0 ? this.currentSpeaker : -1);
+        } else {
+          this.silenceFrameCount++;
+
+          if (this.currentSegmentMFCCs.length > framesPerSegment * 0.3 &&
+              this.silenceFrameCount > CONFIG.VAD_HANG_FRAMES * 2) {
+            this.processSegment();
+            this.currentSegmentMFCCs = [];
+          }
+
+          this.allFrameLabels.push(-1);
+        }
+      }
+
+      if (start < combined.length) {
+        this.residualBuffer = new Float32Array(combined.subarray(start));
+      } else {
+        this.residualBuffer = null;
+      }
+
+      this.updateSpeakingTimes();
+    },
+
+    processSegment() {
+      const mfccFrames = this.currentSegmentMFCCs;
+      if (mfccFrames.length < 5) return;
+
+      const fullFeatures = MFCCExtractor.computeFullFeatures(mfccFrames);
+      const segmentEmbedding = SpeakerModel.l2Normalize(
+        SpeakerModel.computeMean(fullFeatures)
+      );
+
+      this.segmentCount++;
+      this.isReady = true;
+
+      // === 話者Aの初期モデル安定化 ===
+      // 最初の MIN_ENROLLMENT_SEGMENTS セグメントは無条件にAとして登録
+      if (this.numSpeakers === 0) {
+        this.registerSpeaker(segmentEmbedding);
+        this.assignSegmentToSpeaker(0, mfccFrames.length);
+        this.debugInfo = `話者A登録 (seg=${this.segmentCount})`;
+        console.log('[Diarization]', this.debugInfo);
+        return;
+      }
+
+      // 初期安定化期間: 話者Aの最初のN個のセグメントは無条件にAへ
+      if (this.numSpeakers === 1 &&
+          this.speakerModels[0].segmentCount < CONFIG.MIN_ENROLLMENT_SEGMENTS) {
+        this.assignSegmentToSpeaker(0, mfccFrames.length);
+        this.updateSpeakerModel(0, segmentEmbedding);
+        this.debugInfo = `話者A初期安定化中 (${this.speakerModels[0].segmentCount}/${CONFIG.MIN_ENROLLMENT_SEGMENTS})`;
+        console.log('[Diarization]', this.debugInfo);
+        return;
+      }
+
+      // === 話者判定 ===
+      const similarities = [];
+      for (let s = 0; s < this.numSpeakers; s++) {
+        const sim = SpeakerModel.cosineSimilarity(
+          segmentEmbedding,
+          this.speakerModels[s].embedding
+        );
+        similarities.push(sim);
+      }
+      this.lastSimilarities = similarities;
+
+      const maxSim = Math.max(...similarities);
+      const bestSpeaker = similarities.indexOf(maxSim);
+
+      this.debugInfo = `seg=${this.segmentCount} | ` +
+        similarities.map((s, i) => `sim${String.fromCharCode(65+i)}=${s.toFixed(3)}`).join(' | ') +
+        ` | thresh=${CONFIG.SPEAKER_SIMILARITY_THRESHOLD} | conf=${CONFIG.HIGH_CONFIDENCE_THRESHOLD}`;
+      console.log('[Diarization]', this.debugInfo);
+
+      if (maxSim >= CONFIG.SPEAKER_SIMILARITY_THRESHOLD) {
+        // 既知の話者と判定
+        this.assignSegmentToSpeaker(bestSpeaker, mfccFrames.length);
+        // 確信度フィルター: HIGH_CONFIDENCE_THRESHOLD 以上の場合のみモデルを更新
+        if (maxSim >= CONFIG.HIGH_CONFIDENCE_THRESHOLD) {
+          this.updateSpeakerModel(bestSpeaker, segmentEmbedding);
+        }
+        // 既知の話者と判定されたので、連続異質カウンターをリセット
+        this.consecutiveDiffCount = 0;
+        this.candidateEmbeddings = [];
+      } else if (this.numSpeakers < 2 &&
+                 this.segmentCount >= CONFIG.MIN_SEGMENTS_FOR_SECOND_SPEAKER) {
+        // 閾値未満 → 2人目候補としてカウント
+        this.consecutiveDiffCount++;
+        this.candidateEmbeddings.push(new Float32Array(segmentEmbedding));
+        this.debugInfo += ` | diffCount=${this.consecutiveDiffCount}/${CONFIG.CONSECUTIVE_DIFF_REQUIRED}`;
+
+        if (this.consecutiveDiffCount >= CONFIG.CONSECUTIVE_DIFF_REQUIRED) {
+          // 連続して閾値未満が続いた → 本当に別話者と判断して登録
+          const candidateMean = SpeakerModel.l2Normalize(
+            SpeakerModel.computeMean(this.candidateEmbeddings)
+          );
+          this.registerSpeaker(candidateMean);
+          // 候補バッファの埋め込みも全て話者Bのモデルに追加
+          for (const emb of this.candidateEmbeddings) {
+            if (this.speakerModels[1].segmentEmbeddings.length < 30) {
+              this.speakerModels[1].segmentEmbeddings.push(emb);
+              this.speakerModels[1].segmentCount++;
+            }
+          }
+          this.speakerModels[1].embedding = candidateMean;
+          this.assignSegmentToSpeaker(1, mfccFrames.length);
+          this.isSingleSpeaker = false;
+          this.consecutiveDiffCount = 0;
+          this.candidateEmbeddings = [];
+          this.debugInfo += ' -> 話者B登録!';
+          console.log('[Diarization] 話者B登録! similarity=' + maxSim.toFixed(3));
+        } else {
+          // まだ連続回数が足りない → 暫定的にAに割り当て（モデルは更新しない）
+          this.assignSegmentToSpeaker(0, mfccFrames.length);
+        }
+      } else {
+        // 2人登録済み: 最も近い話者に割り当て
+        this.assignSegmentToSpeaker(bestSpeaker, mfccFrames.length);
+        // 確信度が高ければモデル更新
+        if (maxSim >= CONFIG.HIGH_CONFIDENCE_THRESHOLD) {
+          this.updateSpeakerModel(bestSpeaker, segmentEmbedding);
+        }
+        this.consecutiveDiffCount = 0;
+        this.candidateEmbeddings = [];
+      }
+    },
+
+    registerSpeaker(embedding) {
+      this.speakerModels.push({
+        embedding: new Float32Array(embedding),
+        segmentCount: 1,
+        segmentEmbeddings: [new Float32Array(embedding)]
+      });
+      this.numSpeakers++;
+    },
+
+    updateSpeakerModel(speakerIdx, newEmbedding) {
+      const model = this.speakerModels[speakerIdx];
+      model.segmentCount++;
+      model.segmentEmbeddings.push(new Float32Array(newEmbedding));
+
+      const maxHistory = 30;
+      if (model.segmentEmbeddings.length > maxHistory) {
+        model.segmentEmbeddings = model.segmentEmbeddings.slice(-maxHistory);
+      }
+
+      model.embedding = SpeakerModel.l2Normalize(
+        SpeakerModel.computeMean(model.segmentEmbeddings)
+      );
+    },
+
+    assignSegmentToSpeaker(speakerIdx, numFrames) {
+      this.currentSpeaker = speakerIdx;
+
+      const startIdx = Math.max(0, this.allFrameLabels.length - numFrames);
+      for (let i = startIdx; i < this.allFrameLabels.length; i++) {
+        if (this.allFrameLabels[i] !== -1) {
+          this.allFrameLabels[i] = speakerIdx;
+        }
+      }
+    },
+
+    updateSpeakingTimes() {
+      let timeA = 0, timeB = 0;
+      const frameDurationSec = CONFIG.FRAME_SHIFT_MS / 1000;
+
+      const newTimeline = [];
+      let currentSegStart = 0;
+      let currentSegSpeaker = -2;
+
+      for (let i = 0; i < this.allFrameLabels.length; i++) {
+        const label = this.allFrameLabels[i];
+        if (label === 0) timeA += frameDurationSec;
+        else if (label === 1) timeB += frameDurationSec;
+
+        if (label !== currentSegSpeaker) {
+          if (currentSegSpeaker !== -2) {
+            newTimeline.push({
+              start: currentSegStart, end: i, speaker: currentSegSpeaker
+            });
+          }
+          currentSegStart = i;
+          currentSegSpeaker = label;
+        }
+      }
+
+      if (this.allFrameLabels.length > 0 && currentSegSpeaker !== -2) {
+        newTimeline.push({
+          start: currentSegStart, end: this.allFrameLabels.length, speaker: currentSegSpeaker
+        });
+      }
+
+      this.speakerATime = timeA;
+      this.speakerBTime = timeB;
+      this.timelineSegments = newTimeline;
+    }
+  };
+
+  // ============================================================
+  // AudioManager - オーディオ管理
+  // ============================================================
+  const AudioManager = {
+    audioContext: null,
+    mediaStream: null,
+    sourceNode: null,
+    workletNode: null,
+    scriptProcessorNode: null,
+    analyserNode: null,
+    isRecording: false,
+    useWorklet: true,
+
+    getWorkletCode() {
+      return `
+        class AudioCaptureProcessor extends AudioWorkletProcessor {
+          constructor() {
+            super();
+            this.bufferSize = ${CONFIG.WORKLET_BUFFER_SIZE};
+            this.buffer = new Float32Array(this.bufferSize);
+            this.written = 0;
+          }
+          process(inputs) {
+            const input = inputs[0];
+            if (!input || input.length === 0) return true;
+            const ch = input[0];
+            if (!ch) return true;
+            for (let i = 0; i < ch.length; i++) {
+              this.buffer[this.written++] = ch[i];
+              if (this.written >= this.bufferSize) {
+                this.port.postMessage(this.buffer.slice());
+                this.written = 0;
+              }
+            }
+            return true;
+          }
+        }
+        registerProcessor('audio-capture-processor', AudioCaptureProcessor);
+      `;
+    },
+
+    async start() {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+      this.analyserNode = this.audioContext.createAnalyser();
+      this.analyserNode.fftSize = 2048;
+      this.sourceNode.connect(this.analyserNode);
+
+      try {
+        const blob = new Blob([this.getWorkletCode()], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        await this.audioContext.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+
+        this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-capture-processor');
+        this.sourceNode.connect(this.workletNode);
+        this.workletNode.port.onmessage = (e) => {
+          if (this.isRecording) this.onAudioData(e.data);
+        };
+        this.useWorklet = true;
+      } catch (err) {
+        console.warn('AudioWorklet不可、ScriptProcessorNodeにフォールバック:', err);
+        this.scriptProcessorNode = this.audioContext.createScriptProcessor(CONFIG.WORKLET_BUFFER_SIZE, 1, 1);
+        this.sourceNode.connect(this.scriptProcessorNode);
+        this.scriptProcessorNode.connect(this.audioContext.destination);
+        this.scriptProcessorNode.onaudioprocess = (e) => {
+          if (this.isRecording) {
+            this.onAudioData(new Float32Array(e.inputBuffer.getChannelData(0)));
+          }
+        };
+        this.useWorklet = false;
+      }
+
+      this.isRecording = true;
+    },
+
+    onAudioData(rawBuffer) {
+      const downsampled = DSP.downsample(rawBuffer, this.audioContext.sampleRate, CONFIG.TARGET_SAMPLE_RATE);
+      const timestamp = performance.now();
+      DiarizationEngine.processAudio(downsampled, timestamp);
+    },
+
+    stop() {
+      this.isRecording = false;
+      if (this.workletNode) { this.workletNode.disconnect(); this.workletNode = null; }
+      if (this.scriptProcessorNode) {
+        this.scriptProcessorNode.disconnect(); this.scriptProcessorNode = null;
+      }
+      if (this.sourceNode) { this.sourceNode.disconnect(); this.sourceNode = null; }
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(t => t.stop()); this.mediaStream = null;
+      }
+      if (this.audioContext) { this.audioContext.close(); this.audioContext = null; }
+      this.analyserNode = null;
+    }
+  };
+
+  // ============================================================
+  // UIRenderer - UI描画
+  // ============================================================
+  const UIRenderer = {
+    waveformCanvas: null, waveformCtx: null,
+    timelineCanvas: null, timelineCtx: null,
+    ratioCanvas: null, ratioCtx: null,
+    animationId: null,
+
+    init() {
+      this.waveformCanvas = document.getElementById('waveform-canvas');
+      this.waveformCtx = this.waveformCanvas.getContext('2d');
+      this.timelineCanvas = document.getElementById('timeline-canvas');
+      this.timelineCtx = this.timelineCanvas.getContext('2d');
+      this.ratioCanvas = document.getElementById('ratio-canvas');
+      this.ratioCtx = this.ratioCanvas.getContext('2d');
+
+      this.resizeCanvases();
+      window.addEventListener('resize', () => this.resizeCanvases());
+    },
+
+    resizeCanvases() {
+      const dpr = window.devicePixelRatio || 1;
+      [this.waveformCanvas, this.timelineCanvas].forEach(canvas => {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      });
+      const rr = this.ratioCanvas.getBoundingClientRect();
+      this.ratioCanvas.width = rr.width * dpr;
+      this.ratioCanvas.height = rr.height * dpr;
+      this.ratioCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    },
+
+    drawWaveform() {
+      const canvas = this.waveformCanvas;
+      const ctx = this.waveformCtx;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+
+      ctx.fillStyle = CONFIG.COLORS.BACKGROUND;
+      ctx.fillRect(0, 0, w, h);
+
+      if (!AudioManager.analyserNode) return;
+
+      const bufLen = AudioManager.analyserNode.fftSize;
+      const data = new Float32Array(bufLen);
+      AudioManager.analyserNode.getFloatTimeDomainData(data);
+
+      const color = DiarizationEngine.currentSpeaker === 0
+        ? CONFIG.COLORS.SPEAKER_A
+        : DiarizationEngine.currentSpeaker === 1
+          ? CONFIG.COLORS.SPEAKER_B
+          : CONFIG.COLORS.SILENCE;
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+
+      const sliceW = w / bufLen;
+      for (let i = 0; i < bufLen; i++) {
+        const x = i * sliceW;
+        const y = (data[i] + 1) / 2 * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    },
+
+    drawTimeline() {
+      const canvas = this.timelineCanvas;
+      const ctx = this.timelineCtx;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+
+      ctx.fillStyle = CONFIG.COLORS.BACKGROUND;
+      ctx.fillRect(0, 0, w, h);
+
+      const segs = DiarizationEngine.timelineSegments;
+      const total = DiarizationEngine.allFrameLabels.length;
+      if (segs.length === 0 || total === 0) return;
+
+      for (const seg of segs) {
+        const x = (seg.start / total) * w;
+        const sw = ((seg.end - seg.start) / total) * w;
+        ctx.fillStyle = seg.speaker === 0 ? CONFIG.COLORS.SPEAKER_A
+                      : seg.speaker === 1 ? CONFIG.COLORS.SPEAKER_B
+                      : CONFIG.COLORS.SILENCE;
+        ctx.fillRect(x, 0, Math.max(sw, 1), h);
+      }
+    },
+
+    drawRatioChart() {
+      const canvas = this.ratioCanvas;
+      const ctx = this.ratioCtx;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = Math.min(w, h) / 2 - 8;
+
+      ctx.fillStyle = CONFIG.COLORS.BACKGROUND;
+      ctx.fillRect(0, 0, w, h);
+
+      const total = DiarizationEngine.speakerATime + DiarizationEngine.speakerBTime;
+      if (total === 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+        ctx.fillStyle = CONFIG.COLORS.SILENCE;
+        ctx.fill();
+        ctx.fillStyle = CONFIG.COLORS.TEXT;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('データなし', cx, cy);
+        return;
+      }
+
+      const ratioA = DiarizationEngine.speakerATime / total;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + ratioA * 2 * Math.PI);
+      ctx.closePath();
+      ctx.fillStyle = CONFIG.COLORS.SPEAKER_A;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, -Math.PI / 2 + ratioA * 2 * Math.PI, -Math.PI / 2 + 2 * Math.PI);
+      ctx.closePath();
+      ctx.fillStyle = CONFIG.COLORS.SPEAKER_B;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.55, 0, 2 * Math.PI);
+      ctx.fillStyle = '#16213e';
+      ctx.fill();
+
+      ctx.fillStyle = CONFIG.COLORS.SPEAKER_A;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('A: ' + (ratioA * 100).toFixed(1) + '%', cx, cy - 8);
+      ctx.fillStyle = CONFIG.COLORS.SPEAKER_B;
+      ctx.fillText('B: ' + ((1 - ratioA) * 100).toFixed(1) + '%', cx, cy + 8);
+    },
+
+    updateSpeakerIndicator() {
+      const indicator = document.getElementById('speaker-indicator');
+      const label = document.getElementById('speaker-label');
+      const sublabel = document.getElementById('speaker-sublabel');
+
+      if (DiarizationEngine.isSingleSpeaker && DiarizationEngine.currentSpeaker >= 0) {
+        label.textContent = 'A';
+        sublabel.textContent = '1人のみ検出';
+        indicator.style.borderColor = CONFIG.COLORS.SPEAKER_A;
+        indicator.style.color = CONFIG.COLORS.SPEAKER_A;
+      } else if (DiarizationEngine.currentSpeaker === 0) {
+        label.textContent = 'A';
+        sublabel.textContent = '話者 A が発話中';
+        indicator.style.borderColor = CONFIG.COLORS.SPEAKER_A;
+        indicator.style.color = CONFIG.COLORS.SPEAKER_A;
+      } else if (DiarizationEngine.currentSpeaker === 1) {
+        label.textContent = 'B';
+        sublabel.textContent = '話者 B が発話中';
+        indicator.style.borderColor = CONFIG.COLORS.SPEAKER_B;
+        indicator.style.color = CONFIG.COLORS.SPEAKER_B;
+      } else {
+        label.textContent = '--';
+        sublabel.textContent = !AudioManager.isRecording ? '待機中' : (DiarizationEngine.isReady ? '無音' : '分析中...');
+        indicator.style.borderColor = CONFIG.COLORS.SILENCE;
+        indicator.style.color = CONFIG.COLORS.SILENCE;
+      }
+    },
+
+    updateCounters() {
+      document.getElementById('time-a').textContent =
+        DiarizationEngine.speakerATime.toFixed(1) + '秒';
+      document.getElementById('time-b').textContent =
+        DiarizationEngine.speakerBTime.toFixed(1) + '秒';
+    },
+
+    updateDebugInfo() {
+      const info = document.getElementById('debug-info');
+      const engine = DiarizationEngine;
+      let text = `話者数: ${engine.numSpeakers} | セグメント: ${engine.segmentCount} | ` +
+                 `単一話者: ${engine.isSingleSpeaker ? 'はい' : 'いいえ'} | ` +
+                 `異質連続: ${engine.consecutiveDiffCount}/${CONFIG.CONSECUTIVE_DIFF_REQUIRED}`;
+      if (engine.speakerModels.length > 0) {
+        text += '\n';
+        for (let i = 0; i < engine.speakerModels.length; i++) {
+          text += `話者${String.fromCharCode(65+i)}: ${engine.speakerModels[i].segmentCount}seg `;
+        }
+      }
+      if (engine.lastSimilarities.length > 0) {
+        text += '\n類似度: ' + engine.lastSimilarities.map((s, i) =>
+          `${String.fromCharCode(65+i)}=${s.toFixed(3)}`
+        ).join(' / ');
+      }
+      if (engine.debugInfo) {
+        text += `\n${engine.debugInfo}`;
+      }
+      info.textContent = text;
+    },
+
+    updateRecordingStatus(isRecording) {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+      if (isRecording) {
+        dot.classList.add('recording');
+        text.textContent = '録音中';
+      } else {
+        dot.classList.remove('recording');
+        text.textContent = '停止中';
+      }
+    },
+
+    startAnimation() {
+      const animate = () => {
+        this.drawWaveform();
+        this.drawTimeline();
+        this.drawRatioChart();
+        this.updateSpeakerIndicator();
+        this.updateCounters();
+        this.updateDebugInfo();
+        this.animationId = requestAnimationFrame(animate);
+      };
+      animate();
+    },
+
+    stopAnimation() {
+      if (this.animationId) {
+        cancelAnimationFrame(this.animationId);
+        this.animationId = null;
+      }
+    },
+
+    clearAll() {
+      this.drawWaveform();
+      this.drawTimeline();
+      this.drawRatioChart();
+      this.updateSpeakerIndicator();
+      this.updateCounters();
+      this.updateDebugInfo();
+    }
+  };
+
+  // ============================================================
+  // SettingsUI - パラメータ調整UI
+  // ============================================================
+  const SettingsUI = {
+    init() {
+      this.bindSlider('slider-similarity', 'val-similarity', 'SPEAKER_SIMILARITY_THRESHOLD', parseFloat);
+      this.bindSlider('slider-confidence', 'val-confidence', 'HIGH_CONFIDENCE_THRESHOLD', parseFloat);
+      this.bindSlider('slider-segment', 'val-segment', 'SEGMENT_LENGTH_MS', parseInt);
+      this.bindSlider('slider-minseg', 'val-minseg', 'MIN_SEGMENTS_FOR_SECOND_SPEAKER', parseInt);
+      this.bindSlider('slider-consecutive', 'val-consecutive', 'CONSECUTIVE_DIFF_REQUIRED', parseInt);
+    },
+
+    bindSlider(sliderId, valueId, configKey, parser) {
+      const slider = document.getElementById(sliderId);
+      const valueSpan = document.getElementById(valueId);
+
+      if (!slider || !valueSpan) return;
+
+      slider.addEventListener('input', () => {
+        const val = parser(slider.value);
+        CONFIG[configKey] = val;
+        valueSpan.textContent = slider.value;
+      });
+    }
+  };
+
+  // ============================================================
+  // App - アプリケーションコントローラ
+  // ============================================================
+  const App = {
+    init() {
+      CONFIG.init();
+      MFCCExtractor.init();
+      UIRenderer.init();
+      SettingsUI.init();
+      UIRenderer.clearAll();
+
+      document.getElementById('btn-start').addEventListener('click', () => this.start());
+      document.getElementById('btn-stop').addEventListener('click', () => this.stop());
+      document.getElementById('btn-reset').addEventListener('click', () => this.reset());
+    },
+
+    async start() {
+      try {
+        await AudioManager.start();
+        UIRenderer.updateRecordingStatus(true);
+        UIRenderer.startAnimation();
+        document.getElementById('btn-start').disabled = true;
+        document.getElementById('btn-stop').disabled = false;
+      } catch (err) {
+        alert('マイクへのアクセスに失敗しました。\nブラウザの設定でマイクの使用を許可してください。\n\n' + err.message);
+      }
+    },
+
+    stop() {
+      AudioManager.stop();
+      UIRenderer.updateRecordingStatus(false);
+      UIRenderer.stopAnimation();
+      UIRenderer.clearAll();
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = true;
+    },
+
+    reset() {
+      if (AudioManager.isRecording) {
+        AudioManager.stop();
+      }
+      DiarizationEngine.reset();
+      UIRenderer.stopAnimation();
+      UIRenderer.updateRecordingStatus(false);
+      UIRenderer.clearAll();
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = true;
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => App.init());
+})();
+</script>
+</body>
+</html>
