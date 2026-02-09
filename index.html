@@ -407,10 +407,10 @@ section h2 {
         <div class="param-item">
           <label>
             話者判定閾値
-            <span class="param-value" id="val-similarity">0.78</span>
+            <span class="param-value" id="val-similarity">0.6</span>
           </label>
-          <input type="range" id="slider-similarity" min="0.60" max="0.95" step="0.01" value="0.78">
-          <div class="param-hint">低い=別話者と判定しやすい / 高い=同一話者と判定しやすい</div>
+          <input type="range" id="slider-similarity" min="0.60" max="0.95" step="0.01" value="0.6">
+          <div class="param-hint">低い=	同一話者と判定されやすい / 高い=同一話者と判定されにくい</div>
         </div>
         <div class="param-item">
           <label>
@@ -423,7 +423,7 @@ section h2 {
         <div class="param-item">
           <label>
             セグメント長 (ms)
-            <span class="param-value" id="val-segment">400</span>
+            <span class="param-value" id="val-segment">500</span>
           </label>
           <input type="range" id="slider-segment" min="200" max="1000" step="50" value="500">
           <div class="param-hint">短い=応答性高い / 長い=安定性高い</div>
@@ -481,8 +481,8 @@ section h2 {
     VAD_HANG_FRAMES: 15,
 
     // 話者分離設定（UIスライダーで調整可能）
-    SEGMENT_LENGTH_MS: 400,
-    SPEAKER_SIMILARITY_THRESHOLD: 0.78,
+    SEGMENT_LENGTH_MS: 500,
+    SPEAKER_SIMILARITY_THRESHOLD: 0.6,
     HIGH_CONFIDENCE_THRESHOLD: 0.99,
     MIN_ENROLLMENT_SEGMENTS: 5,
     MIN_SEGMENTS_FOR_SECOND_SPEAKER: 5,
