@@ -415,9 +415,9 @@ section h2 {
         <div class="param-item">
           <label>
             モデル更新閾値
-            <span class="param-value" id="val-confidence">0.99</span>
+            <span class="param-value" id="val-confidence">0.92</span>
           </label>
-          <input type="range" id="slider-confidence" min="0.75" max="0.99" step="0.01" value="0.99">
+          <input type="range" id="slider-confidence" min="0.75" max="0.99" step="0.01" value="0.92">
           <div class="param-hint">この閾値以上の確信度の時のみモデルを更新（汚染防止）</div>
         </div>
         <div class="param-item">
@@ -439,12 +439,65 @@ section h2 {
         <div class="param-item">
           <label>
             連続異質セグメント数
-            <span class="param-value" id="val-consecutive">5</span>
+            <span class="param-value" id="val-consecutive">3</span>
           </label>
-          <input type="range" id="slider-consecutive" min="2" max="6" step="1" value="5">
+          <input type="range" id="slider-consecutive" min="2" max="6" step="1" value="3">
           <div class="param-hint">連続してこの回数だけ異なれば2人目を登録（誤登録防止）</div>
         </div>
       </div>
+      <details style="margin-top: 12px;">
+        <summary>音量正規化 / 遠距離話者対応</summary>
+        <div class="param-grid" style="margin-top: 8px;">
+          <div class="param-item">
+            <label>
+              コンプレッサー
+              <span class="param-value" id="val-compressor">ON</span>
+            </label>
+            <input type="range" id="slider-compressor" min="0" max="1" step="1" value="1">
+            <div class="param-hint">音量差を自動圧縮（遠い話者の検出精度向上）</div>
+          </div>
+          <div class="param-item">
+            <label>
+              コンプレッサー閾値 (dB)
+              <span class="param-value" id="val-comp-threshold">-30</span>
+            </label>
+            <input type="range" id="slider-comp-threshold" min="-60" max="-10" step="1" value="-30">
+            <div class="param-hint">この音量以上を圧縮（低い=より多くの音を圧縮）</div>
+          </div>
+          <div class="param-item">
+            <label>
+              圧縮比
+              <span class="param-value" id="val-comp-ratio">6</span>
+            </label>
+            <input type="range" id="slider-comp-ratio" min="1" max="20" step="1" value="6">
+            <div class="param-hint">音量圧縮の強さ（大きい=強い圧縮）</div>
+          </div>
+          <div class="param-item">
+            <label>
+              フレームRMS正規化
+              <span class="param-value" id="val-frame-norm">ON</span>
+            </label>
+            <input type="range" id="slider-frame-norm" min="0" max="1" step="1" value="1">
+            <div class="param-hint">各フレームの音量を一定値に正規化</div>
+          </div>
+          <div class="param-item">
+            <label>
+              VADエネルギー閾値
+              <span class="param-value" id="val-vad-energy">0.004</span>
+            </label>
+            <input type="range" id="slider-vad-energy" min="0.001" max="0.020" step="0.001" value="0.004">
+            <div class="param-hint">低い=遠い話者も検出しやすい / 高い=ノイズに強い</div>
+          </div>
+          <div class="param-item">
+            <label>
+              ノイズフロア倍率
+              <span class="param-value" id="val-noise-mult">2.5</span>
+            </label>
+            <input type="range" id="slider-noise-mult" min="1.5" max="6.0" step="0.5" value="2.5">
+            <div class="param-hint">ノイズフロアの何倍で音声判定するか（低い=感度高い）</div>
+          </div>
+        </div>
+      </details>
     </details>
     <div id="debug-info">待機中...</div>
   </section>
@@ -476,17 +529,30 @@ section h2 {
     PRE_EMPHASIS_COEFF: 0.97,
 
     // VAD設定
-    VAD_ENERGY_THRESHOLD: 0.008,
+    VAD_ENERGY_THRESHOLD: 0.004,
     VAD_CALIBRATION_FRAMES: 80,
-    VAD_HANG_FRAMES: 15,
+    VAD_HANG_FRAMES: 20,
+    VAD_NOISE_FLOOR_MULTIPLIER: 2.5,
+
+    // コンプレッサー設定（音量正規化）
+    USE_COMPRESSOR: true,
+    COMPRESSOR_THRESHOLD: -30,
+    COMPRESSOR_KNEE: 10,
+    COMPRESSOR_RATIO: 6,
+    COMPRESSOR_ATTACK: 0.01,
+    COMPRESSOR_RELEASE: 0.1,
+
+    // フレームRMS正規化
+    USE_FRAME_NORMALIZATION: true,
+    FRAME_TARGET_RMS: 0.1,
 
     // 話者分離設定（UIスライダーで調整可能）
     SEGMENT_LENGTH_MS: 500,
     SPEAKER_SIMILARITY_THRESHOLD: 0.6,
-    HIGH_CONFIDENCE_THRESHOLD: 0.99,
+    HIGH_CONFIDENCE_THRESHOLD: 0.92,
     MIN_ENROLLMENT_SEGMENTS: 5,
     MIN_SEGMENTS_FOR_SECOND_SPEAKER: 5,
-    CONSECUTIVE_DIFF_REQUIRED: 5,  // 2人目登録に必要な連続異質セグメント数
+    CONSECUTIVE_DIFF_REQUIRED: 3,  // 2人目登録に必要な連続異質セグメント数
 
     // デルタ特徴量
     DELTA_WINDOW: 2,
@@ -655,6 +721,19 @@ section h2 {
         sum += frame[i] * frame[i];
       }
       return Math.sqrt(sum / frame.length);
+    },
+
+    normalizeFrameRMS(frame, targetRMS) {
+      const rms = this.computeRMS(frame);
+      if (rms < 1e-10) return frame;
+      const gain = targetRMS / rms;
+      const maxGain = 20;
+      const clampedGain = Math.min(gain, maxGain);
+      const result = new Float32Array(frame.length);
+      for (let i = 0; i < frame.length; i++) {
+        result[i] = frame[i] * clampedGain;
+      }
+      return result;
     }
   };
 
@@ -674,7 +753,11 @@ section h2 {
     },
 
     extractFrame(frame) {
-      const emphasized = DSP.preEmphasis(frame, CONFIG.PRE_EMPHASIS_COEFF);
+      let processedFrame = frame;
+      if (CONFIG.USE_FRAME_NORMALIZATION) {
+        processedFrame = DSP.normalizeFrameRMS(frame, CONFIG.FRAME_TARGET_RMS || 0.1);
+      }
+      const emphasized = DSP.preEmphasis(processedFrame, CONFIG.PRE_EMPHASIS_COEFF);
 
       const windowed = new Float32Array(CONFIG.FFT_SIZE);
       for (let i = 0; i < CONFIG.FRAME_LENGTH_SAMPLES; i++) {
@@ -770,17 +853,18 @@ section h2 {
     isSpeech(frame) {
       const energy = DSP.computeRMS(frame);
       this.frameCount++;
+      const nfMult = CONFIG.VAD_NOISE_FLOOR_MULTIPLIER || 4;
 
       if (this.frameCount <= CONFIG.VAD_CALIBRATION_FRAMES) {
         this.noiseFloor = this.noiseFloor * (this.frameCount - 1) / this.frameCount
                           + energy / this.frameCount;
-        this.speechThreshold = Math.max(this.noiseFloor * 4, CONFIG.VAD_ENERGY_THRESHOLD);
+        this.speechThreshold = Math.max(this.noiseFloor * nfMult, CONFIG.VAD_ENERGY_THRESHOLD);
         return false;
       }
 
       if (!this.isSpeaking) {
         this.noiseFloor = this.noiseFloor * 0.97 + energy * 0.03;
-        this.speechThreshold = Math.max(this.noiseFloor * 4, CONFIG.VAD_ENERGY_THRESHOLD);
+        this.speechThreshold = Math.max(this.noiseFloor * nfMult, CONFIG.VAD_ENERGY_THRESHOLD);
       }
 
       if (energy > this.speechThreshold) {
@@ -1134,6 +1218,7 @@ section h2 {
     audioContext: null,
     mediaStream: null,
     sourceNode: null,
+    compressorNode: null,
     workletNode: null,
     scriptProcessorNode: null,
     analyserNode: null,
@@ -1175,9 +1260,22 @@ section h2 {
       });
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
+      // DynamicsCompressorNode で音量差を圧縮（遠い話者の音声を増幅）
+      let connectFrom = this.sourceNode;
+      if (CONFIG.USE_COMPRESSOR) {
+        this.compressorNode = this.audioContext.createDynamicsCompressor();
+        this.compressorNode.threshold.setValueAtTime(CONFIG.COMPRESSOR_THRESHOLD, this.audioContext.currentTime);
+        this.compressorNode.knee.setValueAtTime(CONFIG.COMPRESSOR_KNEE, this.audioContext.currentTime);
+        this.compressorNode.ratio.setValueAtTime(CONFIG.COMPRESSOR_RATIO, this.audioContext.currentTime);
+        this.compressorNode.attack.setValueAtTime(CONFIG.COMPRESSOR_ATTACK, this.audioContext.currentTime);
+        this.compressorNode.release.setValueAtTime(CONFIG.COMPRESSOR_RELEASE, this.audioContext.currentTime);
+        this.sourceNode.connect(this.compressorNode);
+        connectFrom = this.compressorNode;
+      }
+
       this.analyserNode = this.audioContext.createAnalyser();
       this.analyserNode.fftSize = 2048;
-      this.sourceNode.connect(this.analyserNode);
+      connectFrom.connect(this.analyserNode);
 
       try {
         const blob = new Blob([this.getWorkletCode()], { type: 'application/javascript' });
@@ -1186,7 +1284,7 @@ section h2 {
         URL.revokeObjectURL(url);
 
         this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-capture-processor');
-        this.sourceNode.connect(this.workletNode);
+        connectFrom.connect(this.workletNode);
         this.workletNode.port.onmessage = (e) => {
           if (this.isRecording) this.onAudioData(e.data);
         };
@@ -1194,7 +1292,7 @@ section h2 {
       } catch (err) {
         console.warn('AudioWorklet不可、ScriptProcessorNodeにフォールバック:', err);
         this.scriptProcessorNode = this.audioContext.createScriptProcessor(CONFIG.WORKLET_BUFFER_SIZE, 1, 1);
-        this.sourceNode.connect(this.scriptProcessorNode);
+        connectFrom.connect(this.scriptProcessorNode);
         this.scriptProcessorNode.connect(this.audioContext.destination);
         this.scriptProcessorNode.onaudioprocess = (e) => {
           if (this.isRecording) {
@@ -1219,6 +1317,7 @@ section h2 {
       if (this.scriptProcessorNode) {
         this.scriptProcessorNode.disconnect(); this.scriptProcessorNode = null;
       }
+      if (this.compressorNode) { this.compressorNode.disconnect(); this.compressorNode = null; }
       if (this.sourceNode) { this.sourceNode.disconnect(); this.sourceNode = null; }
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach(t => t.stop()); this.mediaStream = null;
@@ -1488,6 +1587,14 @@ section h2 {
       this.bindSlider('slider-segment', 'val-segment', 'SEGMENT_LENGTH_MS', parseInt);
       this.bindSlider('slider-minseg', 'val-minseg', 'MIN_SEGMENTS_FOR_SECOND_SPEAKER', parseInt);
       this.bindSlider('slider-consecutive', 'val-consecutive', 'CONSECUTIVE_DIFF_REQUIRED', parseInt);
+      this.bindSlider('slider-vad-energy', 'val-vad-energy', 'VAD_ENERGY_THRESHOLD', parseFloat);
+      this.bindSlider('slider-noise-mult', 'val-noise-mult', 'VAD_NOISE_FLOOR_MULTIPLIER', parseFloat);
+      this.bindSlider('slider-comp-threshold', 'val-comp-threshold', 'COMPRESSOR_THRESHOLD', parseInt);
+      this.bindSlider('slider-comp-ratio', 'val-comp-ratio', 'COMPRESSOR_RATIO', parseInt);
+
+      // ON/OFFトグル型スライダー
+      this.bindToggleSlider('slider-compressor', 'val-compressor', 'USE_COMPRESSOR');
+      this.bindToggleSlider('slider-frame-norm', 'val-frame-norm', 'USE_FRAME_NORMALIZATION');
     },
 
     bindSlider(sliderId, valueId, configKey, parser) {
@@ -1500,6 +1607,30 @@ section h2 {
         const val = parser(slider.value);
         CONFIG[configKey] = val;
         valueSpan.textContent = slider.value;
+        // コンプレッサーパラメータはリアルタイムで更新
+        if (AudioManager.compressorNode && configKey.startsWith('COMPRESSOR_')) {
+          const paramMap = {
+            'COMPRESSOR_THRESHOLD': 'threshold',
+            'COMPRESSOR_RATIO': 'ratio'
+          };
+          const param = paramMap[configKey];
+          if (param && AudioManager.compressorNode[param]) {
+            AudioManager.compressorNode[param].setValueAtTime(val, AudioManager.audioContext.currentTime);
+          }
+        }
+      });
+    },
+
+    bindToggleSlider(sliderId, valueId, configKey) {
+      const slider = document.getElementById(sliderId);
+      const valueSpan = document.getElementById(valueId);
+
+      if (!slider || !valueSpan) return;
+
+      slider.addEventListener('input', () => {
+        const val = parseInt(slider.value) === 1;
+        CONFIG[configKey] = val;
+        valueSpan.textContent = val ? 'ON' : 'OFF';
       });
     }
   };
